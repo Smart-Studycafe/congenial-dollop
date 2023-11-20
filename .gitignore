@@ -1,2 +1,3 @@
 server/*.env
 server/*.pem
+server/utils/__pycache__/
