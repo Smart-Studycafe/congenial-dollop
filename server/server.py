@@ -46,16 +46,13 @@ class Register(Resource):
         try:
             connection = database_utils.connect_db()
         except:
-            return {"error": "Something went wrong."}, 500
-        
-        print("Test printing.", file=sys.stdout)
+            return {"error": "Unable to connect DB."}, 500
         
         with connection:
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                sql = "show tables"
+                sql = "select * from user"
                 cursor.execute(sql)
                 result = cursor.fetchall()
-                print(result, file=sys.stdout)
         
         return result
 
@@ -66,14 +63,28 @@ class Register(Resource):
         try:
             user_id = str(json_obj["user_id"])
             username = json_obj["username"]
-            if Validator.validate_user_id(user_id) and Validator.validate_username(username):
-                # DB에 저장
-                print("Available", file=sys.stdout)
-            else:
+            if not (Validator.validate_user_id(user_id) and Validator.validate_username(username)):
                 print("Unable.")
+                return "Invalid user_id and username."
         except:
             return "Something went wrong."
         
-        return json_obj
+        # DB 연결
+        try:
+            connection = database_utils.connect_db()
+        except:
+            return {"error": "Unable to connect DB."}, 500
+        
+        with connection:
+            with connection.cursor() as cursor:
+                sql = f"insert into user values({user_id}, \"{username}\")"
+                result = cursor.execute(sql)
+                if result:
+                    connection.commit()
+                    result = {"result": "Transaction success."}
+                else:
+                    result = {"result": f"Transaction failed while inserting values {user_id}, \"{username}\""}
+
+        return result
 
 app.run(debug=True, port=8080)
