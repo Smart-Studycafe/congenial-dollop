@@ -1,8 +1,10 @@
 from flask import Flask, request
 from flask_restx import Resource, Api
 import pymysql
-from utils import serializer, database_utils
+from utils import serializer
+from utils.database_utils import DatabaseConnector, DatabaseQueryExecutor
 from utils.validator import Validator
+from utils.message_maker import Message
 import sys
 
 app = Flask(__name__)
@@ -11,27 +13,35 @@ api = Api(app)
 @api.route('/health')
 class Health(Resource):
     def get(self):
-        return {"health": "ok"}
+        return Message.Success("Health is good.")
 
 @api.route('/seats')
 class Seats(Resource):
+    # 좌석 정보 반환 API
     def get(self):
-        try:
-            connection = database_utils.connect_db()
-        except:
-            return {"error": "Something went wrong."}, 500
+        conn = DatabaseConnector().connect()
         
-        with connection:
-            with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                sql = "SELECT * FROM SEATS"
-                cursor.execute(sql)
-                result = cursor.fetchall()
-                result = serializer.make_serializable_datetimes(result)
-                
+        if not conn:
+            return Message.FailureDbConnection()
+        
+        try:
+            result = DatabaseQueryExecutor.select_seats(conn)
+            # 트랜잭션 결과 비어있는 경우
+            if not result:
+                result = Message.Failure("Seats table is empty.")
+        except:
+            result = Message.Failure("Error occured while executing select transaction.")
+            
         return result
     
+    # 좌석 삽입 api
     def post(self):
-        # body에 존재하는 데이터값을 가져옴
+        
+        pass
+    
+    # 좌석 정보 변동
+    def put(self):
+        
         
         # 현재 좌석 변동 (입장, 퇴장)
         # 1. 주어진 데이터 무결성 검사
@@ -41,50 +51,49 @@ class Seats(Resource):
 
 @api.route('/register')
 class Register(Resource):
+    # 유저 정보 반환 Rest API
     def get(self):
-        # db에 연결부터 해보자.
-        try:
-            connection = database_utils.connect_db()
-        except:
-            return {"error": "Unable to connect DB."}, 500
+        conn = DatabaseConnector().connect()
+        if not conn:
+            return Message.FailureDbConnection()
         
-        with connection:
-            with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                sql = "select * from user"
-                cursor.execute(sql)
-                result = cursor.fetchall()
+        try:
+            result = DatabaseQueryExecutor.select_users(conn)
+            if not result:
+                result = Message.Failure("User table is empty.")
+        except:
+            result = Message.Failure("Error occured while executing select transaction.")
         
         return result
 
-    def put(self):
+    # 새로운 유저 추가 Rest API
+    def post(self):
         # 유효성 검사 실시
         json_obj = request.get_json()
+        
         # id 유효성 검사
         try:
+            print(json_obj, file=sys.stdout)
             user_id = str(json_obj["user_id"])
             username = json_obj["username"]
-            if not (Validator.validate_user_id(user_id) and Validator.validate_username(username)):
-                print("Unable.")
-                return "Invalid user_id and username."
+            if not Validator.validate_user(user_id, username):
+                return Message.Failure("Invalid user_id and username."), 400
         except:
-            return "Something went wrong."
+            return Message.Failure("user_id and username is not included in JSON body."), 400
         
         # DB 연결
-        try:
-            connection = database_utils.connect_db()
-        except:
-            return {"error": "Unable to connect DB."}, 500
+        conn = DatabaseConnector().connect()
         
-        with connection:
-            with connection.cursor() as cursor:
-                sql = f"insert into user values({user_id}, \"{username}\")"
-                result = cursor.execute(sql)
-                if result:
-                    connection.commit()
-                    result = {"result": "Transaction success."}
-                else:
-                    result = {"result": f"Transaction failed while inserting values {user_id}, \"{username}\""}
-
+        if not conn:
+            return Message.FailureDbConnection()
+        
+        try:
+            result = DatabaseQueryExecutor.insert_user(conn, user_id, username)
+            if result:
+                result = Message.Success("Insert user excuted successfully.")
+        except:
+            result = Message.Failure("Error occured while executing insert transaction.")
+        
         return result
-
+        
 app.run(debug=True, port=8080)
