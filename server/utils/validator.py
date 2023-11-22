@@ -14,3 +14,6 @@ class Validator:
             return True  # 일치하는 경우
         else:
             return False  # 불일치하는 경우
+    
+    def validate_user(input_id: str, input_name: str):
+        return Validator.validate_user_id(input_id) and Validator.validate_username(input_name)
