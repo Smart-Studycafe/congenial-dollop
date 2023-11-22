@@ -9,8 +9,11 @@ class Validator:
             return False
         
     def validate_username(input_name: str):
-        pattern = r'^[가-힣a-zA-Z0-9]{1,10}$'
+        pattern = r'^[가-힣a-zA-Z0-9\s]{1,15}$'
         if re.match(pattern, input_name):
             return True  # 일치하는 경우
         else:
             return False  # 불일치하는 경우
+    
+    def validate_user(input_id: str, input_name: str):
+        return Validator.validate_user_id(input_id) and Validator.validate_username(input_name)
