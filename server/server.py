@@ -1,14 +1,21 @@
 from flask import Flask, request
 from flask_restx import Resource, Api
-import pymysql
-from utils import serializer
-from utils.database_utils import DatabaseConnector, DatabaseQueryExecutor
-from utils.validator import Validator
-from utils.message_maker import Message
+from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
+from utils.Validator import Validator
+from utils.Message_maker import Message
+from utils.Certificator import Certificator
 import sys
 
 app = Flask(__name__)
 api = Api(app)
+certificator = Certificator()
+
+# middleware that checks authorization with api_key
+def check_authorization(request, certificator):
+    args = request.args
+    key = args.get("api_key")
+    return certificator.check_available(key)
+    
 
 @api.route('/health')
 class Health(Resource):
@@ -16,9 +23,13 @@ class Health(Resource):
         return Message.Success("Health is good.")
 
 @api.route('/seats')
+@api.doc(params={'api_key': 'An api key that noticed.'})
 class Seats(Resource):
     # 좌석 정보 반환 API
     def get(self):
+        if not check_authorization(request, certificator):
+            return Message.Failure("API Key is not certificated.")
+        
         conn = DatabaseConnector().connect()
         
         if not conn:
@@ -36,12 +47,15 @@ class Seats(Resource):
     
     # 좌석 삽입 api
     def post(self):
+        if not check_authorization(request, certificator):
+            return Message.Failure("API Key is not certificated.")
         
         pass
     
     # 좌석 정보 변동
     def put(self):
-        
+        if not check_authorization(request, certificator):
+            return Message.Failure("API Key is not certificated.")
         
         # 현재 좌석 변동 (입장, 퇴장)
         # 1. 주어진 데이터 무결성 검사
@@ -50,9 +64,13 @@ class Seats(Resource):
         pass
 
 @api.route('/register')
+@api.doc(params={'api_key': 'An api key that noticed.'})
 class Register(Resource):
     # 유저 정보 반환 Rest API
     def get(self):
+        if not check_authorization(request, certificator):
+            return Message.Failure("API Key is not certificated.")
+        
         conn = DatabaseConnector().connect()
         if not conn:
             return Message.FailureDbConnection()
@@ -68,6 +86,9 @@ class Register(Resource):
 
     # 새로운 유저 추가 Rest API
     def post(self):
+        if not check_authorization(request, certificator):
+            return Message.Failure("API Key is not certificated.")
+        
         # 유효성 검사 실시
         json_obj = request.get_json()
         
