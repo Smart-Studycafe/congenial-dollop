@@ -1,14 +1,13 @@
 from dotenv import load_dotenv
-from .message_maker import Message
-from . import serializer
+from .Message_maker import Message
+from .Serializer import Serializer
 import pymysql
 import os
-import sys
 load_dotenv()
 
 class DatabaseConnector:
     def __init__(self):
-        pass
+        self.connection = None
     
     def connect(self):
         try:
@@ -27,6 +26,16 @@ class DatabaseConnector:
         self.connection.close()
     
 class DatabaseQueryExecutor:
+    def select_keys(conn):
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        
+        with conn:
+            sql = "select value from api_key"
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        
+        return result
+        
     def select_seats(conn):
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         
@@ -34,7 +43,7 @@ class DatabaseQueryExecutor:
             sql = "select * from seats"
             cursor.execute(sql)
             result = cursor.fetchall()
-            result = serializer.make_serializable_datetimes(result)
+            result = Serializer.make_serializable_datetimes(result)
         
         return result
     
