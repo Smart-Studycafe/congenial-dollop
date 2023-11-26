@@ -1,5 +1,5 @@
-flask
-flask_restx
+Flask
+flask-restx
 pymysql
 python-dotenv
 uwsgi
