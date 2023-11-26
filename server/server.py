@@ -116,5 +116,6 @@ class Register(Resource):
             result = Message.Failure("Error occured while executing insert transaction.")
         
         return result
-        
-app.run(debug=True, port=8080)
+
+if __name__ == "__main__":
+    app.run(debug=True, port=8080)
