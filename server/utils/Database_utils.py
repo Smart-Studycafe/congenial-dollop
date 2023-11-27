@@ -1,3 +1,4 @@
+import sys
 from dotenv import load_dotenv
 from .Message_maker import Message
 from .Serializer import Serializer
@@ -47,15 +48,43 @@ class DatabaseQueryExecutor:
         
         return result
     
+    def insert_seats(conn, seat_id, user_id, usage_start, usage_end):
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        usage_start = f'"{usage_start}"'
+        usage_end = f'"{usage_end}"'
+        values = [seat_id, user_id, usage_start, usage_end]
+        values = ', '.join(values)
+        
+        with conn:
+            # foreign key constraints check.
+            sql = f"select * from users"
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            is_obeying = False
+            for record in result:
+                if "user_id" in record and record["user_id"] == int(user_id):
+                    is_obeying = True
+                    break
+            
+            if not is_obeying:
+                raise ValueError("Foreign Key constraint violated.")
+            
+            sql = f"insert into seats values({values})"
+            result = cursor.execute(sql)
+            if result:
+                conn.commit()
+                return True
+            else:
+                return False
+    
     def insert_user(conn, user_id, username):
         cursor = conn.cursor()
         
         with conn.cursor() as cursor:
-            sql = f"insert into user values({user_id}, \"{username}\")"
+            sql = f"insert into users values({user_id}, \"{username}\")"
             result = cursor.execute(sql)
             if result:
                 conn.commit()
-                result = {"result": "Transaction success."}
                 return Message.Success("Transaction success.")
             else:
                 return Message.Success(f"Transaction failed while inserting values {user_id}, \"{username}\"")
@@ -64,7 +93,7 @@ class DatabaseQueryExecutor:
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         
         with conn:
-            sql = "select * from user"
+            sql = "select * from users"
             cursor.execute(sql)
             result = cursor.fetchall()
         
