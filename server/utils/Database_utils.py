@@ -77,6 +77,22 @@ class DatabaseQueryExecutor:
             else:
                 return False
     
+    def modify_seats(conn, seat_id, user_id, usage_start, usage_end):
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        usage_start = f'"{usage_start}"'
+        usage_end = f'"{usage_end}"'
+        values = [seat_id, user_id, usage_start, usage_end]
+        values = ', '.join(values)
+        
+        with conn:
+            modify_sql = f"update seats\
+                set seat_id={seat_id}, user_id={user_id}, usage_start={usage_start}, usage_end={usage_end}\
+                where seat_id={seat_id}"
+            cursor.execute(modify_sql)
+            conn.commit()
+
+        return True
+        
     def insert_user(conn, user_id, username):
         cursor = conn.cursor()
         
