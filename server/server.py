@@ -58,7 +58,6 @@ class Seats(Resource):
         json_obj = request.get_json()
         
         try:
-            # TODO: 유효성 검사 해야함
             seat_id = str(json_obj["seat_id"])
             user_id = str(json_obj["user_id"])
             usage_start = str(json_obj["usage_start"])
@@ -75,7 +74,9 @@ class Seats(Resource):
         try:
             result = DatabaseQueryExecutor.insert_seats(conn, seat_id, user_id, usage_start, usage_end)
             if result:
-                result =  Message.Success("Insert seat execution succeed.")
+                result = Message.Success("Insert seat execution succeed.")
+            else:
+                Message.Failure("Error occured while executing insert transaction.")
         except:
             result = Message.Failure("Error occured while executing insert transaction.")
         
@@ -87,11 +88,31 @@ class Seats(Resource):
         if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
-        # 현재 좌석 변동 (입장, 퇴장)
-        # 1. 주어진 데이터 무결성 검사
-        # 2. 유저 존재 유무 검사
-        # 3. 트랜잭션 실행
-        pass
+        json_obj = request.get_json()
+        
+        try:
+            seat_id = str(json_obj["seat_id"])
+            user_id = str(json_obj["user_id"])
+            usage_start = str(json_obj["usage_start"])
+            usage_end = str(json_obj["usage_end"])
+            Validator.validate_seat(seat_id, user_id, usage_start, usage_end)
+        except:
+            return Message.Failure("Invalid request body."), 400
+        conn = DatabaseConnector().connect()
+        
+        if not conn:
+            return Message.FailureDbConnection()
+        
+        try:
+            result = DatabaseQueryExecutor.modify_seats(conn, seat_id, user_id, usage_start, usage_end)
+            if result:
+                result = Message.Success("Update seat execution succeed.")
+            else:
+                result = Message.Failure("Error occured while executing insert transaction.")
+        except:
+            result = Message.Failure("Error occured while executing insert transaction.")
+        
+        return result
 
 @api.route('/register')
 @api.doc(params={'api_key': 'An api key that noticed.'})
