@@ -1,14 +1,18 @@
+import sys
 from flask import Flask, request
-from flask_restx import Resource, Api
+from flask_restx import Resource, Api, fields
 from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
 from utils.Validator import Validator
 from utils.Message_maker import Message
 from utils.Certificator import Certificator
-import sys
+from models.Seats_model import Seats_model
+from models.User_model import User_model
 
 app = Flask(__name__)
 api = Api(app)
-certificator = Certificator()
+CERTIFICATOR = Certificator()
+SEATS_MODEL = Seats_model(api).get_model()
+USER_MODEL = User_model(api).get_model()
 
 # middleware that checks authorization with api_key
 def check_authorization(request, certificator):
@@ -27,7 +31,7 @@ class Health(Resource):
 class Seats(Resource):
     # 좌석 정보 반환 API
     def get(self):
-        if not check_authorization(request, certificator):
+        if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
         conn = DatabaseConnector().connect()
@@ -46,15 +50,41 @@ class Seats(Resource):
         return result
     
     # 좌석 삽입 api
+    @api.doc(body=SEATS_MODEL)
     def post(self):
-        if not check_authorization(request, certificator):
+        if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
-        pass
+        json_obj = request.get_json()
+        
+        try:
+            # TODO: 유효성 검사 해야함
+            seat_id = str(json_obj["seat_id"])
+            user_id = str(json_obj["user_id"])
+            usage_start = str(json_obj["usage_start"])
+            usage_end = str(json_obj["usage_end"])
+            Validator.validate_seat(seat_id, user_id, usage_start, usage_end)
+        except:
+            return Message.Failure("Invalid request body."), 400
+        
+        conn = DatabaseConnector().connect()
+        
+        if not conn:
+            return Message.FailureDbConnection()
+        
+        try:
+            result = DatabaseQueryExecutor.insert_seats(conn, seat_id, user_id, usage_start, usage_end)
+            if result:
+                result =  Message.Success("Insert seat execution succeed.")
+        except:
+            result = Message.Failure("Error occured while executing insert transaction.")
+        
+        return result
     
     # 좌석 정보 변동
+    @api.doc(body=SEATS_MODEL)
     def put(self):
-        if not check_authorization(request, certificator):
+        if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
         # 현재 좌석 변동 (입장, 퇴장)
@@ -68,7 +98,7 @@ class Seats(Resource):
 class Register(Resource):
     # 유저 정보 반환 Rest API
     def get(self):
-        if not check_authorization(request, certificator):
+        if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
         conn = DatabaseConnector().connect()
@@ -86,7 +116,7 @@ class Register(Resource):
 
     # 새로운 유저 추가 Rest API
     def post(self):
-        if not check_authorization(request, certificator):
+        if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
         # 유효성 검사 실시
@@ -94,13 +124,11 @@ class Register(Resource):
         
         # id 유효성 검사
         try:
-            print(json_obj, file=sys.stdout)
             user_id = str(json_obj["user_id"])
             username = json_obj["username"]
-            if not Validator.validate_user(user_id, username):
-                return Message.Failure("Invalid user_id and username."), 400
+            Validator.validate_user(user_id, username)
         except:
-            return Message.Failure("user_id and username is not included in JSON body."), 400
+            return Message.Failure("user_id and username is not valid or not in request body."), 400
         
         # DB 연결
         conn = DatabaseConnector().connect()
