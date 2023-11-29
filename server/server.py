@@ -1,10 +1,11 @@
-import sys
+import json
 from flask import Flask, request
 from flask_restx import Resource, Api, fields
 from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
 from utils.Validator import Validator
 from utils.Message_maker import Message
 from utils.Certificator import Certificator
+from utils.Face_recognizer import Face_recognizer
 from models.Seats_model import Seats_model
 from models.User_model import User_model
 
@@ -165,6 +166,23 @@ class Register(Resource):
             result = Message.Failure("Error occured while executing insert transaction.")
         
         return result
+
+@api.route('/detect')
+class Detect(Resource):
+    def get(self):
+        # 이미지 가져와
+        json_obj = request.get_json()
+
+        encoded_img = json_obj['image']
+
+        # 모델에 넣어
+        face_detected = Face_recognizer.detect_faces(encoded_img)
+        res = {'face_detected': face_detected}
+        res = json.dumps(res)
+
+        # 결과 보내
+
+        return res
 
 if __name__ == "__main__":
     app.run(debug=True, port=8080)
