@@ -169,7 +169,7 @@ class Register(Resource):
 
 @api.route('/detect')
 class Detect(Resource):
-    def get(self):
+    def post(self):
         # 이미지 가져와
         json_obj = request.get_json()
 
