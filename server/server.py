@@ -31,17 +31,24 @@ class Health(Resource):
 @api.doc(params={'api_key': 'An api key that noticed.'})
 class Seats(Resource):
     # 좌석 정보 반환 API
+    @api.param('seat_id', 'Seat id that you want. (Singular data)')
     def get(self):
         if not check_authorization(request, CERTIFICATOR):
             return Message.Failure("API Key is not certificated.")
         
         conn = DatabaseConnector().connect()
-        
         if not conn:
             return Message.FailureDbConnection()
-        
+
         try:
-            result = DatabaseQueryExecutor.select_seats(conn)
+            args = request.args
+            # TODO: 좌석 유효성 검사 진행
+            seat_id = args.get("seat_id")
+            # 하나만 가져오는 트랜잭션
+            if seat_id:
+                result = DatabaseQueryExecutor.select_one_seat(conn, seat_id)
+            else:
+                result = DatabaseQueryExecutor.select_seats(conn)
             # 트랜잭션 결과 비어있는 경우
             if not result:
                 result = Message.Failure("Seats table is empty.")
@@ -168,19 +175,19 @@ class Register(Resource):
         return result
 
 @api.route('/detect')
+@api.doc(params={'api_key': 'An api key that noticed.'})
 class Detect(Resource):
     def post(self):
-        # 이미지 가져와
+        if not check_authorization(request, CERTIFICATOR):
+            return Message.Failure("API Key is not certificated.")
+        
         json_obj = request.get_json()
 
         encoded_img = json_obj['image']
 
-        # 모델에 넣어
         face_detected = Face_recognizer.detect_faces(encoded_img)
         res = {'face_detected': face_detected}
         res = json.dumps(res)
-
-        # 결과 보내
 
         return res
 
