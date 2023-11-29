@@ -2,8 +2,7 @@ import sys
 from dotenv import load_dotenv
 from .Message_maker import Message
 from .Serializer import Serializer
-import pymysql
-import os
+import pymysql, os, json
 load_dotenv()
 
 class DatabaseConnector:
@@ -36,7 +35,18 @@ class DatabaseQueryExecutor:
             result = cursor.fetchall()
         
         return result
+    
+    def select_one_seat(conn,seat_id):
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+
+        with conn:
+            sql = f"select * from seats where seat_id={seat_id}"
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            result = Serializer.make_serializable_one_datetime(result)
         
+        return result
+
     def select_seats(conn):
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         
