@@ -12,7 +12,7 @@ from models.User_model import User_model
 
 app = Flask(__name__)
 api = Api(app)
-CORS(app, origins=["http://127.0.0.1"])
+CORS(app, origins=["http://3.38.79.202"])
 CERTIFICATOR = Certificator()
 SEATS_MODEL = Seats_model(api).get_model()
 USER_MODEL = User_model(api).get_model()
