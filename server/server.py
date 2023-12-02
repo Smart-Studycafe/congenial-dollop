@@ -1,4 +1,5 @@
 import json
+import sys
 from flask import Flask, request
 from flask_restx import Resource, Api, fields
 from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
@@ -6,8 +7,12 @@ from utils.Validator import Validator
 from utils.Message_maker import Message
 from utils.Certificator import Certificator
 from utils.Face_recognizer import Face_recognizer
+from utils.Mqtt_client import MqttClient
 from models.Seats_model import Seats_model
 from models.User_model import User_model
+import os
+
+print(os.getcwd())
 
 app = Flask(__name__)
 api = Api(app)
@@ -190,5 +195,24 @@ class Detect(Resource):
 
         return res
 
+@api.route('/buzzer')
+@api.doc(params={'api_key': 'An api key that noticed.',
+                 'device_id': 'Device id that you want to make buzz.'})
+class Buzzer(Resource):
+    def post(self):
+        if not check_authorization(request, CERTIFICATOR):
+            return Message.Failure("API Key is not certificated.")
+        
+        try:
+            args = request.args
+            device_id = int(args.get("device_id"))
+            
+            # mqtt client를 사용해 publish
+            client = MqttClient()
+            client.publish(device_id, 1)
+        except :
+            return Message.Failure("Something went wrong.")
+        
+        return Message.Success("Publish success?")
 if __name__ == "__main__":
     app.run(debug=True, port=8080)
