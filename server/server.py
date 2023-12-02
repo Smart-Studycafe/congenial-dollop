@@ -187,7 +187,6 @@ class Detect(Resource):
 
         face_detected = Face_recognizer.detect_faces(encoded_img)
         res = {'face_detected': face_detected}
-        res = json.dumps(res)
 
         return res
 
