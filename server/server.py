@@ -1,5 +1,6 @@
 from flask import Flask, request
 from flask_restx import Resource, Api
+from flask_cors import CORS
 from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
 from utils.Validator import Validator
 from utils.Message_maker import Message
@@ -8,12 +9,10 @@ from utils.Face_recognizer import Face_recognizer
 from utils.Mqtt_client import MqttClient
 from models.Seats_model import Seats_model
 from models.User_model import User_model
-import os
-
-print(os.getcwd())
 
 app = Flask(__name__)
 api = Api(app)
+CORS(app, origins=["http://127.0.0.1"])
 CERTIFICATOR = Certificator()
 SEATS_MODEL = Seats_model(api).get_model()
 USER_MODEL = User_model(api).get_model()
