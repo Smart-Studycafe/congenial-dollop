@@ -1,7 +1,5 @@
-import json
-import sys
 from flask import Flask, request
-from flask_restx import Resource, Api, fields
+from flask_restx import Resource, Api
 from utils.Database_utils import DatabaseConnector, DatabaseQueryExecutor
 from utils.Validator import Validator
 from utils.Message_maker import Message
