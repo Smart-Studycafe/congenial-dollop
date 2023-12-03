@@ -1,5 +1,0 @@
-Flask
-flask-restx
-pymysql
-python-dotenv
-uwsgi

@@ -1,7 +1,0 @@
-server/*.env
-server/*.pem
-server/utils/__pycache__/
-server/models/__pycache__/
-server/.venv
-server/*.crt
-server/*.key
