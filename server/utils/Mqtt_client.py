@@ -12,13 +12,13 @@ class MqttClient():
         self.client = mqtt.Client()
         self.client.tls_set(self.ca, self.cert, self.key)
     
-    def publish(self, device_id, buzzflag):
-        topic = "smartstudy/buzzer"
+    def publish(self, device_id):
+        topic = f"smartstudy/buzzer/{device_id}"
         self.client.connect(host=self.host, port=8883)
         self.client.loop_start()
         while True:
             time.sleep(1)
-            message = f'{{"device_id": {device_id}, "buzzflag": {buzzflag}}}'
+            message = '{"buzzflag": 1}'
             result = self.client.publish(topic, message)
             status = result[0]
             if status == 0:
