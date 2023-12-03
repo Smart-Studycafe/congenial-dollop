@@ -206,7 +206,7 @@ class Buzzer(Resource):
             
             # mqtt client를 사용해 publish
             client = MqttClient()
-            client.publish(device_id, 1)
+            client.publish(device_id)
         except :
             return Message.Failure("Something went wrong.")
         
