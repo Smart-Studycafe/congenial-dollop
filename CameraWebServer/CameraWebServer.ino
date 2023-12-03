@@ -2,6 +2,8 @@
 #include <Arduino_JSON.h>
 #include "esp_camera.h"
 #include "base64.h"
+#include "RTClib.h"
+#include "time.h"
 #include <HTTPClient.h>
 #include <AWS_IOT.h>
 
@@ -11,15 +13,31 @@
 const char seatInfoAPI[] = "";
 const char facedetectAPI[] = "";
 char hostAddress[] = "";
-const char* ssid = "";
-const char* password = "";
-char clientId[] = "ghddmsrl100";
+const char* ssid = "HEK0159";
+const char* password = "20200427";
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 3600*9;
+const int daylightOffset_sec = 0;
+const int paymentInterval = 60000;
+const int facedetectInterval = 10000;
+
+bool paymentStatus = true;
+int facedetectExecutionCount; // number of facedetect function execution
+int facedetectCount; // number of times a face detected
+unsigned long currentFacedetectTime;
+unsigned long currentPaymentTime;
+
+char clientId[] = "smart_study_cafe";
 char sTOPIC_NAME[] = "esp32/bme280";
 char pTOPIC_NAME[] = "esp32/bme280";
+
 HTTPClient http;
 AWS_IOT testButton;
+TaskHandle_t Task1;
+camera_config_t config;
 
-void startCameraServer();
+void initCamera();
+void initAWS();
 
 void captureQuick(){
   camera_fb_t *fb = NULL;
@@ -28,9 +46,235 @@ void captureQuick(){
   esp_camera_fb_return(fb);
 }
 
+DateTime parseDateTime(String dateString) {
+  int year = dateString.substring(0, 4).toInt();
+  int month = dateString.substring(5, 7).toInt();
+  int day = dateString.substring(8, 10).toInt();
+  int hour = dateString.substring(11, 13).toInt();
+  int minute = dateString.substring(14, 16).toInt();
+  int second = dateString.substring(17, 19).toInt();
+  return DateTime(year, month, day, hour, minute, second);
+}
 
-void cameraInit(){
-  camera_config_t config;
+DateTime getCurrentDateTime(){
+  struct tm timeInfo;
+  DateTime dt;
+  if(!getLocalTime(&timeInfo)){
+    Serial.println("Failed to obtain time");
+    return dt;  
+  }
+  dt = DateTime(
+    timeInfo.tm_year + 1900, 
+    timeInfo.tm_mon + 1, 
+    timeInfo.tm_mday, 
+    timeInfo.tm_hour, 
+    timeInfo.tm_min, 
+    timeInfo.tm_sec
+  );
+  return dt;
+}
+
+
+void getPaymentStatus(){
+  http.begin(seatInfoAPI);
+  int httpCode = http.GET();
+//  Serial.print("status code in getPaymentStatus() : ");
+//  Serial.println(httpCode);
+  if (httpCode > 0) {
+    // JSON Parsing
+    String response = http.getString();
+    JSONVar parsedResponse = JSON.parse(response);
+    String usageEndDateTimeString = parsedResponse["usage_end"];
+
+    // getCurrentTime and compare
+    DateTime currentDateTime = getCurrentDateTime();
+    DateTime usageEndDateTime = parseDateTime(usageEndDateTimeString);
+//    Serial.println("parsed Current DateTime : " + String(currentDateTime.timestamp()));
+//    Serial.println("parsed usageEnd Datetime : " + String(usageEndDateTime.timestamp()));
+    if(usageEndDateTime < currentDateTime){
+      paymentStatus = false;
+      Serial.println("Seat unpaid");
+    }
+  } else Serial.print("http request failed error code : " + String(httpCode));
+  http.end();
+}
+
+// request facedetect info
+bool getFacedetect(){
+  bool result = false;
+  captureQuick();
+  camera_fb_t *fb = NULL;
+  config.jpeg_quality = 10;
+  
+  // capture
+  fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    return false;
+  }
+  
+  // request
+  http.begin(facedetectAPI);
+  http.addHeader("Content-Type", "application/json");
+  String encodedImageData = base64::encode(fb->buf, fb->len);
+  JSONVar jsonRequestBody;
+  jsonRequestBody["image"] = encodedImageData;
+  String requestBody = JSON.stringify(jsonRequestBody); 
+//  Serial.println("Sended data : " + requestBody);
+  int httpCode = http.POST(requestBody);
+//  Serial.print("status code in getFacedetect() : ");
+//  Serial.println(httpCode);
+
+  // response
+  if (httpCode > 0) {
+    String response = http.getString();
+//    Serial.println("payload : " + response);    
+    JSONVar parsedResponse = JSON.parse(response);
+    if (parsedResponse.hasOwnProperty("face_detected")) {
+//      Serial.print("face_detected = ");
+//      Serial.println((bool) parsedResponse["face_detected"]);
+      result = parsedResponse["face_detected"];
+    } else Serial.print("Invalid JSON");
+  } else Serial.print("http request failed error code : " + String(httpCode));
+  if(result){
+    Serial.println("face detected!");
+  } else Serial.println("face not detected");
+  // free resources
+  config.jpeg_quality = 16;
+  http.end();
+  esp_camera_fb_return(fb);
+  return result;
+}
+
+// takePicture and publish to mqtt broker
+void takePictureAndPublish(){
+  camera_fb_t *fb = esp_camera_fb_get();
+  if(!fb) {
+     Serial.println("Camera capture failed in takePictureAndPublish()");
+     return;
+  }
+  const char *data = (const char *)fb->buf;
+  String encodedImageData = base64::encode(fb->buf, fb->len);
+  // formating json
+  JSONVar myObject;
+  myObject["image"] = encodedImageData;
+  String jsonString = JSON.stringify(myObject);
+  char* payload = (char *)malloc(jsonString.length() + 1);
+  strcpy(payload, jsonString.c_str());
+  
+  // publishing topic 
+  int codeNum = testButton.publish(pTOPIC_NAME, payload);
+  //Serial.print("code : " + String(codeNum) + "\n");
+
+  // free resources
+  free(payload);
+  esp_camera_fb_return(fb);
+}
+
+float captureAndMeasureBrightness() {
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    return -1.0f;
+  }
+
+  // 픽셀 데이터에 접근하여 휘도 측정
+  uint32_t sum = 0;
+  for (size_t i = 0; i < fb->len; i += 2) {
+    sum += (fb->buf[i] << 8) | fb->buf[i + 1];
+  }
+
+  // 휘도 계산
+  float brightness = static_cast<float>(sum) / (fb->len / 2);
+  esp_camera_fb_return(fb);
+  return brightness;
+}
+
+void Task1code(void * pvParameters){
+  while(true){
+    takePictureAndPublish();
+    delay(1);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+  Serial.println();
+  
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  //initCamera, AWS
+  initCamera();
+  initAWS();
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  
+  xTaskCreatePinnedToCore(
+    Task1code,
+    "Task1",
+    10000,
+    NULL,
+    0,
+    &Task1,
+    0
+  );
+  currentPaymentTime = millis() - 50000;
+}
+
+void loop() {
+  if((WiFi.status() == WL_CONNECTED)) {
+    if(millis() - currentPaymentTime >= paymentInterval){
+      currentPaymentTime = millis();
+      getPaymentStatus();
+    }
+    if(!paymentStatus && (millis() - currentFacedetectTime >= facedetectInterval)){
+      currentFacedetectTime = millis();
+      facedetectExecutionCount++;
+      if(getFacedetect()) facedetectCount++;
+      if(facedetectExecutionCount == 5){
+        if(facedetectCount >= 3){
+          //이메일 알림 pub 추가
+          Serial.print("He is illegal user!\n");
+        }
+        else Serial.print("He is not a illegal user!\n");
+        facedetectExecutionCount = facedetectCount = 0;
+        paymentStatus = true;
+      }
+    }
+
+  } else {
+    Serial.println("Error on HTTP request");
+  }
+//  Serial.println(captureAndMeasureBrightness());
+//  delay(1000);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void initCamera(){
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
   config.pin_d0 = Y2_GPIO_NUM;
@@ -54,7 +298,7 @@ void cameraInit(){
   config.frame_size = FRAMESIZE_QVGA;
   config.fb_location = CAMERA_FB_IN_PSRAM;
   config.grab_mode = CAMERA_GRAB_LATEST;
-  config.jpeg_quality = 10;
+  config.jpeg_quality = 16;
   config.fb_count = 2;
   // camera init
   esp_err_t err = esp_camera_init(&config);
@@ -64,115 +308,7 @@ void cameraInit(){
   }
 }
 
-void getPaymentStatus(){
-  http.begin(seatInfoAPI);
-  int httpCode = http.GET();
-  Serial.print("status code : ");
-  Serial.println(httpCode);
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println(payload);
-
-    // pseudo code
-    // paseJSON(payload);
-    // JSONVar responseObj = JSON.parse(payload);
-    // JSONVar state = responseObj["payment"];
-    // Serial.println(state);
-    // if(state && 카메라가 사람을 인식했을 때){
-    //   Serial.println("unusual user");
-    //   publishSMS();
-    // }
-  }
-  http.end();
-}
-
-void getFacedetect(){
-  captureQuick();
-  camera_fb_t *fb = NULL;
-  fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Camera capture failed");
-    return;
-  }
-  
-  http.begin(facedetectAPI);
-  http.addHeader("Content-Type", "application/json");
-  String endcodedImageData = base64::encode(fb->buf, fb->len);
-  String httpRequestData = "{\"image\" : \"" + endcodedImageData + "\"}" ;
-  Serial.println("Sended data : " + httpRequestData );
-  
-  int httpCode = http.POST(httpRequestData);
-  Serial.print("status code : ");
-  Serial.println(httpCode);
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println(payload);
-  }
-  http.end();
-  esp_camera_fb_return(fb);
-}
-
-void takePictureaAndPublish(){
-  camera_fb_t *fb = esp_camera_fb_get();
-  if(!fb) {
-     Serial.println("Camera capture failed in takePictureAndPublish()");
-     return;
-  }
-  const char *data = (const char *)fb->buf;
-  // Image metadata.  Yes it should be cleaned up to use printf if the function is available
-  Serial.print("Size of image:");
-  Serial.println(fb->len);
-  Serial.print("Shape->width:");
-  Serial.print(fb->width);
-  Serial.print("height:");
-  Serial.println(fb->height);
-
-  String encodedImageData = base64::encode(fb->buf, fb->len);
-  // formating json
-  JSONVar myObject;
-  myObject["image"] = encodedImageData;
-  String jsonString = JSON.stringify(myObject);
-  char* payload = (char *)malloc(jsonString.length() + 1);
-  strcpy(payload, jsonString.c_str());
-  Serial.print("cpy complete");  
-  //Serial.println("Sended data : " + jsonString);
-  // publishing topic 
-  int codeNum = testButton.publish(pTOPIC_NAME, payload); 
-  Serial.print("code : ");
-  Serial.println(codeNum);
-//  if(codeNum == 0){
-//    Serial.print("Publish Message: ");
-//    Serial.println(jsonString);
-//  }
-  Serial.println("Published");
-  Serial.println();
-  free(payload);
-  // Killing cam resource
-  esp_camera_fb_return(fb);
-}
-
-
-void setup() {
-  Serial.begin(115200);
-  Serial.setDebugOutput(true);
-  Serial.println();
-
-  cameraInit();
-    
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-
-  //startCameraServer();
-  Serial.print("Camera Ready! Use 'http://");
-  Serial.print(WiFi.localIP());
-  Serial.println("' to connect");
-
-  //AWS Setting
+void initAWS(){
   if(testButton.connect(hostAddress, clientId) == 0){
     Serial.println("Connected to AWS");
     delay(1000);
@@ -181,46 +317,4 @@ void setup() {
     Serial.println("AWS connection failed, Check the HOST Address");
     while(1);
   }
-  
-}
-
-void loop() {
-  if ((WiFi.status() == WL_CONNECTED)) {
-//    getPaymentStatus();
-//    getFacedetect();
-    //publishMessage();
-  } else {
-    Serial.println("Error on HTTP request");
-  }
-  takePictureaAndPublish();
-  delay(1);
-//  String s = "{\"temp\" : 30}";
-//  char publishJSON[100] = {0};
-//  s.toCharArray(publishJSON, s.length()+1);
-//  if(testButton.publish(pTOPIC_NAME, publishJSON) == 0){
-//    Serial.print("Publish Message: ");
-//    Serial.println(publishJSON);
-//    }
-//  else Serial.println("Publish failed");
-//  delay(500);
-
-  
-//  camera_fb_t * frame;
-//  frame = esp_camera_fb_get();
-//  dl_matrix3du_t *image_matrix = dl_matrix3du_alloc(1, frame->width, frame->height, 3);
-//  fmt2rgb888(frame->buf, frame->len, frame->format, image_matrix->item);
-//
-//  esp_camera_fb_return(frame);
-//
-//  box_array_t *boxes = face_detect(image_matrix, &mtmn_config);
-//  if(boxes != NULL){
-//    detections = detections + 1;
-//    Serial.printf("Faces detected %d times \n", detections);  
-//
-//    dl_lib_free(boxes->score);
-//    dl_lib_free(boxes->box);
-//    dl_lib_free(boxes->landmark);
-//    dl_lib_free(boxes);
-//  }
-//  dl_matrix3du_free(image_matrix);
 }
