@@ -13,27 +13,32 @@
 const char seatInfoAPI[] = "";
 const char facedetectAPI[] = "";
 char hostAddress[] = "";
-const char* ssid = "HEK0159";
-const char* password = "20200427";
+const char* ssid = "";
+const char* password = "";
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 3600*9;
 const int daylightOffset_sec = 0;
 const int paymentInterval = 60000;
 const int facedetectInterval = 10000;
+const int publishInterval = 10000;
 
 bool paymentStatus = true;
 int facedetectExecutionCount; // number of facedetect function execution
 int facedetectCount; // number of times a face detected
 unsigned long currentFacedetectTime;
 unsigned long currentPaymentTime;
+unsigned long currentPublishTime;
+unsigned long currentSubScenarioTime;
 
-char clientId[] = "smart_study_cafe";
-char sTOPIC_NAME[] = "esp32/bme280";
-char pTOPIC_NAME[] = "esp32/bme280";
+char clientId[] = "smartstudy";
+char test[] = "$aws/things/smartstudy/shadow/get/accepted";
+char streamingPubTopicName[] = "smartstudy/stream/1";
+char alarmsendPubTopicName[] = "smartstudy/seat1";
+char getShadowPubTopicName[] = "$aws/things/smartstudy/shadow/get";
 
 HTTPClient http;
 AWS_IOT testButton;
-TaskHandle_t Task1;
+TaskHandle_t task1;
 camera_config_t config;
 
 void initCamera();
@@ -74,7 +79,6 @@ DateTime getCurrentDateTime(){
   return dt;
 }
 
-
 void getPaymentStatus(){
   http.begin(seatInfoAPI);
   int httpCode = http.GET();
@@ -104,7 +108,7 @@ bool getFacedetect(){
   bool result = false;
   captureQuick();
   camera_fb_t *fb = NULL;
-  config.jpeg_quality = 10;
+//  config.jpeg_quality = 10;
   
   // capture
   fb = esp_camera_fb_get();
@@ -112,7 +116,6 @@ bool getFacedetect(){
     Serial.println("Camera capture failed");
     return false;
   }
-  
   // request
   http.begin(facedetectAPI);
   http.addHeader("Content-Type", "application/json");
@@ -134,13 +137,13 @@ bool getFacedetect(){
 //      Serial.print("face_detected = ");
 //      Serial.println((bool) parsedResponse["face_detected"]);
       result = parsedResponse["face_detected"];
-    } else Serial.print("Invalid JSON");
-  } else Serial.print("http request failed error code : " + String(httpCode));
+    } else Serial.println("Invalid JSON");
+  } else Serial.println("http request failed error code : " + String(httpCode));
   if(result){
     Serial.println("face detected!");
   } else Serial.println("face not detected");
   // free resources
-  config.jpeg_quality = 16;
+//  config.jpeg_quality = 16;
   http.end();
   esp_camera_fb_return(fb);
   return result;
@@ -163,31 +166,12 @@ void takePictureAndPublish(){
   strcpy(payload, jsonString.c_str());
   
   // publishing topic 
-  int codeNum = testButton.publish(pTOPIC_NAME, payload);
+  int codeNum = testButton.publish(streamingPubTopicName, payload);
   //Serial.print("code : " + String(codeNum) + "\n");
 
   // free resources
   free(payload);
   esp_camera_fb_return(fb);
-}
-
-float captureAndMeasureBrightness() {
-  camera_fb_t *fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Camera capture failed");
-    return -1.0f;
-  }
-
-  // 픽셀 데이터에 접근하여 휘도 측정
-  uint32_t sum = 0;
-  for (size_t i = 0; i < fb->len; i += 2) {
-    sum += (fb->buf[i] << 8) | fb->buf[i + 1];
-  }
-
-  // 휘도 계산
-  float brightness = static_cast<float>(sum) / (fb->len / 2);
-  esp_camera_fb_return(fb);
-  return brightness;
 }
 
 void Task1code(void * pvParameters){
@@ -201,7 +185,8 @@ void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
-  
+
+  //WiFi Config
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -210,20 +195,13 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
 
-  //initCamera, AWS
+  
+  //initCamera, AWS, NTP
   initCamera();
   initAWS();
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   
-  xTaskCreatePinnedToCore(
-    Task1code,
-    "Task1",
-    10000,
-    NULL,
-    0,
-    &Task1,
-    0
-  );
+  xTaskCreatePinnedToCore(Task1code, "Task1", 10000, NULL, 0, &task1, 0);
   currentPaymentTime = millis() - 50000;
 }
 
@@ -247,15 +225,10 @@ void loop() {
         paymentStatus = true;
       }
     }
-
   } else {
     Serial.println("Error on HTTP request");
   }
-//  Serial.println(captureAndMeasureBrightness());
-//  delay(1000);
 }
-
-
 
 
 
@@ -298,7 +271,7 @@ void initCamera(){
   config.frame_size = FRAMESIZE_QVGA;
   config.fb_location = CAMERA_FB_IN_PSRAM;
   config.grab_mode = CAMERA_GRAB_LATEST;
-  config.jpeg_quality = 16;
+  config.jpeg_quality = 10;
   config.fb_count = 2;
   // camera init
   esp_err_t err = esp_camera_init(&config);
