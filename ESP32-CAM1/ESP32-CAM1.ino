@@ -10,31 +10,26 @@
 #define CAMERA_MODEL_AI_THINKER // Has PSRAM
 #include "camera_pins.h"
 
-const char seatInfoAPI[] = "";
-const char facedetectAPI[] = "";
-char hostAddress[] = "";
+const char seatInfoAPI[] = ""; // 좌석 정보 api 주소
+const char facedetectAPI[] = ""; // 얼굴 인식 api 주소
+char hostAddress[] = ""; // aws 엔드포인트
 const char* ssid = "";
 const char* password = "";
-const char* ntpServer = "pool.ntp.org";
+const char* ntpServer = "pool.ntp.org"; //ntp서버 주소
 const long gmtOffset_sec = 3600*9;
 const int daylightOffset_sec = 0;
-const int paymentInterval = 60000;
-const int facedetectInterval = 10000;
-const int publishInterval = 10000;
+const int paymentInterval = 60000; // 결제 정보 확인 시간 간격
+const int facedetectInterval = 10000; // 얼굴 인식 시간 간격
 
-bool paymentStatus = true;
-int facedetectExecutionCount; // number of facedetect function execution
-int facedetectCount; // number of times a face detected
-unsigned long currentFacedetectTime;
-unsigned long currentPaymentTime;
-unsigned long currentPublishTime;
-unsigned long currentSubScenarioTime;
+bool paymentStatus = true; //결제 상태
+int facedetectExecutionCount; // 얼굴인 인식 함수 실행 횟수
+int facedetectCount; // 얼굴 감지 횟수
+unsigned long currentFacedetectTime; // 얼굴 횟수 함수 마지막 실행 시간
+unsigned long currentPaymentTime; // 결제 정보 확인 함수 마지막 실행 시간
 
-char clientId[] = "smartstudy";
-char test[] = "$aws/things/smartstudy/shadow/get/accepted";
-char streamingPubTopicName[] = "smartstudy/stream/1";
-char alarmsendPubTopicName[] = "smartstudy/seat1";
-char getShadowPubTopicName[] = "$aws/things/smartstudy/shadow/get";
+char clientId[] = "smartstudy1";
+char streamingPubTopicName[] = "smartstudy/stream/1"; // image 데이터를 계속 보낼(스트리밍 할) 규칙 이름
+char alarmsendPubTopicName[] = "smartstudy/seat"; // 이메일 전송 규칙 이름
 
 HTTPClient http;
 AWS_IOT testButton;
@@ -97,8 +92,9 @@ void getPaymentStatus(){
 //    Serial.println("parsed usageEnd Datetime : " + String(usageEndDateTime.timestamp()));
     if(usageEndDateTime < currentDateTime){
       paymentStatus = false;
-      Serial.println("Seat unpaid");
-    }
+      Serial.println("Seat unpaid!");
+    } 
+      Serial.println("Seat paid");
   } else Serial.print("http request failed error code : " + String(httpCode));
   http.end();
 }
@@ -218,6 +214,8 @@ void loop() {
       if(facedetectExecutionCount == 5){
         if(facedetectCount >= 3){
           //이메일 알림 pub 추가
+          char* payload = "{\"cheating\" :\"True\",\"seat_id\" : 1}";
+          while(testButton.publish(alarmsendPubTopicName, payload) != 0);
           Serial.print("He is illegal user!\n");
         }
         else Serial.print("He is not a illegal user!\n");
