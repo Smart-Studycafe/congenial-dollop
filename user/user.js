@@ -11,7 +11,8 @@ var cancelReservationButton = document.getElementById("cancel-reservation-button
 var currentSeat = null;
 
 setTimeout(function(){
-    location.reload();
+    loadSeatInfo();
+    console.log("좌석 현황 호출");
 }, 10000);
 
 setInterval(function() {
