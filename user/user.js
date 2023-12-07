@@ -205,3 +205,7 @@ window.onclick = function (event) {
         hideModal();
     }
 };
+
+document.getElementById('rules-button').addEventListener('click', function() {
+    document.getElementById('rules-panel').classList.toggle('show');
+});

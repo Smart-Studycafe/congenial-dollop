@@ -37,23 +37,23 @@ seats.forEach(function (seat) {
   const seatDiv = document.getElementById('seat-' + seat.id);
   seatDiv.className = 'seat' + (seat.reserved ? ' reserved' : '');
   seatDiv.onclick = function () {
-    console.log('좌석 클릭');
+    console.log('좌석 정보:', seat);
     cameraModal.style.visibility = "block";
 
     // 부저 버튼 클릭
     modalBuzzerButton.onclick = function () {
+      console.log(`좌석 ${seat.id}에서 부저 버튼 클릭`);
       const message = JSON.stringify({
         api_key: 'kaupassword!',
         device_id: seat.id
       });
       
       // POST 요청
-      fetch('http://3.38.79.202:8080/buzzer?api_key=kaupassword!', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json'
-          },
-          body: message
+      fetch(`http://3.38.79.202:8080/buzzer?api_key=kaupassword!&device_id=${seat.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
       .then(response => response.json())
       .then(response => {
@@ -78,3 +78,7 @@ const cameraModalClose = document.getElementsByClassName("close")[0];
 cameraModalClose.onclick = function () {
   hideModal();
 };
+
+document.getElementById('rules-button').addEventListener('click', function() {
+  document.getElementById('rules-panel').classList.toggle('show');
+});
