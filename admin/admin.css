@@ -56,11 +56,11 @@ body {
 
 .modal-content {
     background-color: #fefefe;
-    margin: 10% 15%;
+    margin: 10% auto;
     padding: 20px;
     border: 2px solid #69380e;
-    width: auto;
-    height: auto;
+    width: 50%;
+    height: 30%;
     border-radius: 10px;
     animation: scaleIn 0.5s forwards;
 }

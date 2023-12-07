@@ -33,15 +33,24 @@
             <p class="modal-title">HANGTUDY Reservation</p>
             <p id="modal-header-text">🤔 이름을 입력해주세요</p>
             <input id="customer-name" type="text">
+            <p id="error-message" style="color: red;"></p>
             <p>⏰ 예약 시간을 설정해주세요</p>
             <select id="reservation-time">
+                <option value="0.02">1분</option>
+                <option value="0.05">3분</option>
+                <option value="0.08">5분</option>
                 <option value="1">1시간</option>
                 <option value="2">2시간</option>
                 <option value="3">3시간</option>
             </select>
-            <button id="reserve-button">예약하기</button>
+            <p id="modal-reservation-end-time"></p>
+            <div style="display: flex;">
+                <button id="reserve-button" style="margin-right: 10px;">예약</button>
+                <button id="cancel-reservation-button">예약 취소</button>
+            </div>                     
         </div>
     </div>
+    <p id="current-time" style="position: fixed; right: 0; bottom: 0;"></p>
     <script src="user.js"></script>
 </body>
 </html>

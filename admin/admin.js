@@ -9,6 +9,12 @@ const cameraModal = document.getElementById("camera-modal");
 const modalBuzzerButton = document.getElementById("modal-buzzer-button");
 const modalContent = cameraModal.getElementsByClassName("modal-content")[0];
 
+setInterval(function() {
+  var now = new Date();
+  var currentTime = now.getHours() + ":" + now.getMinutes() + ":" + now.getSeconds();
+  document.getElementById('current-time').textContent = "현재 시간: " + currentTime;
+}, 1000);
+
 function showModal() {
   cameraModal.style.display = "block";
   modalContent.style.visibility = "visible";
@@ -34,12 +40,14 @@ seats.forEach(function (seat) {
     console.log('좌석 클릭!');
     cameraModal.style.visibility = "block";
 
+    // 부저 버튼 클릭
     modalBuzzerButton.onclick = function () {
       const message = JSON.stringify({
         api_key: 'kaupassword!',
         device_id: seat.id
       });
-      // POST 요청 보내기
+      
+      // POST 요청
       fetch('http://3.38.79.202:8080/buzzer?api_key=kaupassword!', {
           method: 'POST',
           headers: {
