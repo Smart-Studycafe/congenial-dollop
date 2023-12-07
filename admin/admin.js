@@ -1,6 +1,3 @@
-var awsIot = require('aws-iot-device-sdk');
-const topic = 'esp32/bme280';
-
 const seats = [
   { id: 1, reserved: false },
   { id: 2, reserved: false },
@@ -9,37 +6,8 @@ const seats = [
 ];
 
 const cameraModal = document.getElementById("camera-modal");
-const cameraFrame = document.getElementById("camera-frame");
 const modalBuzzerButton = document.getElementById("modal-buzzer-button");
 const modalContent = cameraModal.getElementsByClassName("modal-content")[0];
-
-var device = awsIot.device({
-  keyPath: '9eb51cfc1d691fd6f04c392a8d0ebff343271d20c690e1e7226e96ad10bc52f6-private.pem.key',
-  certPath: '9eb51cfc1d691fd6f04c392a8d0ebff343271d20c690e1e7226e96ad10bc52f6-certificate.pem.crt',
-  caPath: 'AmazonRootCA1.pem',
-  clientId: 'smartstudycafe',
-  host: 'a2ab3bby7g4h30-ats.iot.ap-northeast-2.amazonaws.com'
-});
-
-device.on('connect', function () {
-  console.log('AWS IoT에 연결되었습니다.');
-  device.subscribe(topic);
-});
-
-device.on('message', function (topic, payload) {
-  console.log('메시지 수신', payload.toString());
-  const data = JSON.parse(payload.toString());
-
-  if ('image' in data) {
-    const imageData = data.image;
-    console.log('이미지 데이터:', imageData);
-    cameraFrame.src = "data:image/jpeg;base64," + imageData;
-  }
-});
-
-device.on('error', function (error) {
-  console.log('에러 발생:', error);
-});
 
 function showModal() {
   cameraModal.style.display = "block";
@@ -72,7 +40,7 @@ seats.forEach(function (seat) {
         device_id: seat.id
       });
       // POST 요청 보내기
-      fetch('http://3.38.79.202:8080/buzzer?api_key=kaupassword!&device_id=' + seat.id, {
+      fetch('http://3.38.79.202:8080/buzzer?api_key=kaupassword!', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json'
@@ -81,16 +49,11 @@ seats.forEach(function (seat) {
       })
       .then(response => response.json())
       .then(response => {
-          if (response.success) {
-              console.log('Buzzer 요청이 성공했습니다.');
-          } else {
-              console.error('Buzzer 요청이 실패했습니다.', response.message);
-          }
+          console.log(response);
       })
       .catch(error => {
           console.error('Buzzer 요청 중 오류 발생:', error);
       });
-      device.publish(topic, message);
     };
 
     showModal();

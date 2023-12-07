@@ -38,10 +38,10 @@ function formatDatetimeToCustomFormat(isoString) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    console.log("DOMContentLoaded");
     // GET
-    fetch("127.0.0.1:5500/seats?api_key=kaupassword!", {
-        method: 'GET',
-        mode: 'cors',
+    fetch("http://3.38.79.202:8080/seats?api_key=kaupassword!", {
+        method: 'GET'
     })
     .then(response => {
         if (!response.ok) {
@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return response.json();
     })
     .then(seats => {
+        console.log('Received seats from server:', seats);
         seats.forEach(function (seat) {
             var seatDiv = document.getElementById('seat-' + seat.seat_id);
             if (seat.user_id) {
@@ -58,32 +59,36 @@ document.addEventListener('DOMContentLoaded', function () {
                 seatDiv.className = 'seat';
             }
             seatDiv.onclick = function () {
-                    showModal();
-                    currentSeat = seat;
-                    var modalHeaderText = document.getElementById("modal-header-text");
-                    var reserveButton = document.getElementById("reserve-button");
-                    if (seat.user_id) {
-                        modalHeaderText.innerText = '🔄 예약을 변경하려면 새로운 시간을 입력해주세요';
-                        reserveButton.innerText = '예약 변경하기';
-                        document.getElementById("customer-name").style.visibility = "visible";
-                    } else {
-                        modalHeaderText.innerText = '🤔 이름을 입력해주세요';
-                        reserveButton.innerText = '예약하기';
-                    }
-                };
-            });
-        })
-        .catch(error => {
-            console.error('Error fetching seats:', error);
+                console.log('Seat clicked:', seat);
+                showModal();
+                currentSeat = seat;
+                var modalHeaderText = document.getElementById("modal-header-text");
+                var reserveButton = document.getElementById("reserve-button");
+                if (seat.user_id) {
+                    modalHeaderText.innerText = '🔄 예약을 변경하려면 새로운 시간을 입력해주세요';
+                    reserveButton.innerText = '예약 변경하기';
+                    document.getElementById("customer-name").style.visibility = "visible";
+                } else {
+                    modalHeaderText.innerText = '🤔 이름을 입력해주세요';
+                    reserveButton.innerText = '예약하기';
+                }
+            };
         });
+    })
+    .catch(error => {
+        console.error('Error fetching seats:', error);
+    });
 });
 
 reserveButton.onclick = function () {
+    console.log("Reserve button clicked");
     var name = customerNameInput.value;
     var time = parseInt(reservationTimeInput.value);
 
+    console.log(`Name: ${name}, Time: ${time}`);
+
     if (typeof name === 'string' && time && !isNaN(time)) {
-        var url = currentSeat.user_id ? "127.0.0.1:5500/seats?api_key=kaupassword!" + currentSeat.seat_id + "?api_key=kaupassword!" : "127.0.0.1:5500/seats?api_key=kaupassword!";
+        var url = currentSeat.user_id ? "http://3.38.79.202:8080/seats?api_key=kaupassword!" : "http://3.38.79.202:8080/seats?api_key=kaupassword!";
         var method = currentSeat.user_id ? "PUT" : "POST";
 
         var now = new Date();
@@ -91,6 +96,8 @@ reserveButton.onclick = function () {
 
         var usageEnd = new Date(now.getTime() + time * 60 * 60 * 1000).toISOString();
         usageEnd = formatDatetimeToCustomFormat(usageEnd);
+
+        console.log(`URL: ${url}, Method: ${method}, Usage start: ${usageStart}, Usage end: ${usageEnd}`);
 
         fetch(url, {
             method: method,
@@ -106,28 +113,24 @@ reserveButton.onclick = function () {
         })
         .then(response => response.json())
         .then(response => {
-            if (response.success) {
-                currentSeat.user_id = 1;
-                var seatDiv = document.getElementById('seat-' + currentSeat.seat_id);
-                if (currentSeat.user_id) {
-                    seatDiv.className = 'seat reserved'; 
-                } else {
-                    seatDiv.className = 'seat';
-                }
-            } else {
-                console.error(response.message);
-            }
+            console.log('Response from server:', response);
         })
         .catch(error => {
-            console.error('Error fetching seats:', error);
+            console.error('Error:', error);
         });
 
         hideModal();
     }
 };
 
+span.onclick = function() {
+    hideModal();
+};
+
 window.onclick = function (event) {
     if (event.target == modal) {
+        console.log("Modal background clicked");
         hideModal();
     }
 };
+
