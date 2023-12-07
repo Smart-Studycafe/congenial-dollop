@@ -5,3 +5,4 @@ server/models/__pycache__/
 server/.venv
 server/*.crt
 server/*.key
+client/certificates
