@@ -37,7 +37,7 @@ seats.forEach(function (seat) {
   const seatDiv = document.getElementById('seat-' + seat.id);
   seatDiv.className = 'seat' + (seat.reserved ? ' reserved' : '');
   seatDiv.onclick = function () {
-    console.log('좌석 클릭!');
+    console.log('좌석 클릭');
     cameraModal.style.visibility = "block";
 
     // 부저 버튼 클릭
@@ -60,7 +60,7 @@ seats.forEach(function (seat) {
           console.log(response);
       })
       .catch(error => {
-          console.error('Buzzer 요청 중 오류 발생:', error);
+          console.error('Buzzer 요청 중 오류 발생: ', error);
       });
     };
 
